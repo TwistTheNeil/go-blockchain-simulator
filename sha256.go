@@ -6,11 +6,11 @@ import (
 	"strconv"
 )
 
-func Appender() func(string) string {
+func Appender() func(string) (int, string) {
 	nonce := -1
-	return func(x string) string {
+	return func(x string) (int, string) {
 		nonce += 1
-		return x + strconv.Itoa(nonce)
+		return nonce, x + strconv.Itoa(nonce)
 	}
 }
 
@@ -19,12 +19,13 @@ func main() {
 	h := sha256.New()
 	target := "00000"
 
-	for i := 0; ; i++ {
-		h.Write([]byte(AppendNonce("hello")))
+	for {
+		nonce, AppendedNonce := AppendNonce("hello")
+		h.Write([]byte(AppendedNonce))
 
 		calculated_hash := h.Sum(nil)
 
-		fmt.Printf("%d %x\n", i, calculated_hash)
+		fmt.Printf("%d %x\n", nonce, calculated_hash)
 		calculated_hash_s := fmt.Sprintf("%x", calculated_hash)
 
 		if calculated_hash_s[:len(target)] == target {
