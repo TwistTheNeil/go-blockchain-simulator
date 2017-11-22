@@ -1,6 +1,7 @@
 package main
 
 import (
+	"./lib/ds"
 	"flag"
 	"fmt"
 	"net"
@@ -41,6 +42,9 @@ func main() {
 
 	flag.Parse()
 
+	var miners []ds.Miner
+	var clients []ds.Client
+
 	var miner_port int = GetPortFromPtr(miner_port_flag)
 	var client_port int = GetPortFromPtr(client_port_flag)
 
@@ -52,6 +56,15 @@ func main() {
 
 	OpenListener(miner_port, new_miner_connection, what)
 	OpenListener(client_port, new_client_connection, what)
+
+	for {
+		select {
+		case conn := <-new_miner_connection:
+			miners = append(miners, ds.Miner{conn, 0})
+		case conn := <-new_client_connection:
+			clients = append(clients, ds.Client{conn})
+		}
+	}
 
 	// TODO: remove stuff beyond this point
 	<-what

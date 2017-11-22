@@ -1,5 +1,7 @@
 package ds
 
+import "net"
+
 type Block struct {
 	Nonce   int
 	Payload string
@@ -13,4 +15,13 @@ type Blockchain struct {
 	Last     int
 	Tamper   bool
 	Complete bool
+}
+
+type Miner struct {
+	Connection net.Conn
+	Mined      int
+}
+
+type Client struct {
+	Connection net.Conn
 }
