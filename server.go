@@ -29,6 +29,16 @@ func OpenListener(port int, new_connection chan net.Conn, what chan bool) {
 
 }
 
+func Broadcast(miners map[net.Conn]ds.Miner, msg ds.Message) {
+	for conn, miner := range miners {
+		enc := gob.NewEncoder(conn)
+		err := enc.Encode(&msg)
+		if err != nil {
+			fmt.Println("Broadcast error: ", conn, " -> ", miner, "->", err)
+		}
+	}
+}
+
 func GetPortFromPtr(port *int) int {
 	x := fmt.Sprintf("%d", *port)
 	p, _ := strconv.Atoi(x)
@@ -45,6 +55,9 @@ func main() {
 
 	miners := make(map[net.Conn]ds.Miner)
 	clients := make(map[net.Conn]ds.Client)
+	blockchain := ds.Blockchain{[]ds.Block{}, -1, false, true}
+
+	fmt.Println(len(blockchain.Blocks))
 
 	var miner_port int = GetPortFromPtr(miner_port_flag)
 	var client_port int = GetPortFromPtr(client_port_flag)
@@ -53,6 +66,8 @@ func main() {
 	new_client_connection := make(chan net.Conn)
 	remove_miner_connection := make(chan net.Conn)
 	remove_client_connection := make(chan net.Conn)
+	new_miner_message := make(chan ds.Message)
+	new_payload := make(chan string)
 
 	// TODO: Get rid of this channel eventually
 	what := make(chan bool)
@@ -64,29 +79,62 @@ func main() {
 		select {
 		case conn := <-new_miner_connection:
 			miners[conn] = ds.Miner{conn, 0}
-			fmt.Printf("GOT CONN")
-			fmt.Println(conn)
+			fmt.Println("Received connection from ", conn)
 
 			go func(conn net.Conn) {
 				dec := gob.NewDecoder(conn)
 				for {
-					var str string
-					err := dec.Decode(&str)
+					var message ds.Message
+					err := dec.Decode(&message)
 					if err != nil {
-						fmt.Println("DEC ERROR", err)
+						fmt.Println("GOB DECODE ERROR: ", err)
 						break
 					}
 					fmt.Println("GOT HERE")
-					fmt.Println(str)
+					fmt.Println(message)
+					new_miner_message <- message
 					fmt.Println("FIN HERE")
 				}
+				fmt.Println("Attempting to close connection ", conn)
 				remove_miner_connection <- conn
-				fmt.Println("DEBUG: HIT THIS")
-				fmt.Println(conn)
 			}(conn)
+
+		case msg := <-new_miner_message:
+			if msg.WorkingBlock.Index > blockchain.Last {
+				if msg.Verify() {
+					blockchain.Blocks[msg.WorkingBlock.Index] = msg.WorkingBlock
+					blockchain.Last += 1
+					msg.Mined = true
+					Broadcast(miners, msg)
+				}
+			}
+
+		case payload := <-new_payload:
+			if len(blockchain.Blocks) == 0 {
+				fmt.Println("sdf", payload)
+			}
 
 		case conn := <-new_client_connection:
 			clients[conn] = ds.Client{conn}
+			fmt.Println("Received client connection: ", conn)
+
+			go func(conn net.Conn) {
+				dec := gob.NewDecoder(conn)
+				for {
+					var message string
+					err := dec.Decode(&message)
+					if err != nil {
+						fmt.Println("GOB DECODE ERROR: ", err)
+						break
+					}
+					fmt.Println("GOT HERE")
+					fmt.Println(message)
+					new_payload <- message
+					fmt.Println("FIN HERE")
+				}
+				fmt.Println("Attempting to close connection ", conn)
+				remove_client_connection <- conn
+			}(conn)
 
 		case conn := <-remove_miner_connection:
 			delete(miners, conn)
