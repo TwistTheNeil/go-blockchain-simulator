@@ -1,7 +1,8 @@
 package main
 
 import (
-	"./lib/ds"
+	//	"./lib/ds"
+	"encoding/gob"
 	"flag"
 	"fmt"
 	"net"
@@ -42,14 +43,16 @@ func main() {
 
 	flag.Parse()
 
-	var miners []ds.Miner
-	var clients []ds.Client
+	miners := make(map[net.Conn]int)
+	clients := make(map[net.Conn]int)
 
 	var miner_port int = GetPortFromPtr(miner_port_flag)
 	var client_port int = GetPortFromPtr(client_port_flag)
 
 	new_miner_connection := make(chan net.Conn)
 	new_client_connection := make(chan net.Conn)
+	remove_miner_connection := make(chan net.Conn)
+	remove_client_connection := make(chan net.Conn)
 
 	// TODO: Get rid of this channel eventually
 	what := make(chan bool)
@@ -60,9 +63,36 @@ func main() {
 	for {
 		select {
 		case conn := <-new_miner_connection:
-			miners = append(miners, ds.Miner{conn, 0})
+			miners[conn] = 0
+			fmt.Printf("GOT CONN")
+			fmt.Println(conn)
+
+			go func(conn net.Conn) {
+				dec := gob.NewDecoder(conn)
+				for {
+					var str string
+					err := dec.Decode(&str)
+					if err != nil {
+						fmt.Println("DEC ERROR", err)
+						break
+					}
+					fmt.Println("GOT HERE")
+					fmt.Println(str)
+					fmt.Println("FIN HERE")
+				}
+				remove_miner_connection <- conn
+				fmt.Println("DEBUG: HIT THIS")
+				fmt.Println(conn)
+			}(conn)
+
 		case conn := <-new_client_connection:
-			clients = append(clients, ds.Client{conn})
+			clients[conn] = 0
+
+		case conn := <-remove_miner_connection:
+			delete(miners, conn)
+
+		case conn := <-remove_client_connection:
+			delete(clients, conn)
 		}
 	}
 
