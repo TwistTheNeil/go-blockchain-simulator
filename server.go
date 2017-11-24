@@ -1,7 +1,7 @@
 package main
 
 import (
-	//	"./lib/ds"
+	"./lib/ds"
 	"encoding/gob"
 	"flag"
 	"fmt"
@@ -43,8 +43,8 @@ func main() {
 
 	flag.Parse()
 
-	miners := make(map[net.Conn]int)
-	clients := make(map[net.Conn]int)
+	miners := make(map[net.Conn]ds.Miner)
+	clients := make(map[net.Conn]ds.Client)
 
 	var miner_port int = GetPortFromPtr(miner_port_flag)
 	var client_port int = GetPortFromPtr(client_port_flag)
@@ -63,7 +63,7 @@ func main() {
 	for {
 		select {
 		case conn := <-new_miner_connection:
-			miners[conn] = 0
+			miners[conn] = ds.Miner{conn, 0}
 			fmt.Printf("GOT CONN")
 			fmt.Println(conn)
 
@@ -86,7 +86,7 @@ func main() {
 			}(conn)
 
 		case conn := <-new_client_connection:
-			clients[conn] = 0
+			clients[conn] = ds.Client{conn}
 
 		case conn := <-remove_miner_connection:
 			delete(miners, conn)
