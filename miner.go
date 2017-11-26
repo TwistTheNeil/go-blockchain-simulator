@@ -1,8 +1,8 @@
 package main
 
 import (
-	//"./lib/ds"
-	//	"crypto/sha256"
+	"./lib/ds"
+	"crypto/sha256"
 	"encoding/gob"
 	"flag"
 	"fmt"
@@ -19,18 +19,25 @@ func OpenConnection(addr string, port int) net.Conn {
 	return conn
 }
 
-func Appender() func(string) (int, string) {
-	nonce := -1
-	return func(x string) (int, string) {
-		nonce += 1
-		return nonce, x + strconv.Itoa(nonce)
-	}
-}
-
 func GetPortFromPtr(port *int) int {
 	x := fmt.Sprintf("%d", *port)
 	p, _ := strconv.Atoi(x)
 	return p
+}
+
+func Mine(payload string, target string) (string, int) {
+	for nonce := 0; ; nonce++ {
+		h := sha256.New()
+		h.Write([]byte(payload + strconv.Itoa(nonce)))
+		hash := fmt.Sprintf("%x", h.Sum(nil))
+		if hash[:len(target)] == target {
+			fmt.Println(target)
+			fmt.Println("returning", hash, nonce)
+			return hash, nonce
+			break
+		}
+	}
+	return "", -1
 }
 
 func main() {
@@ -46,31 +53,33 @@ func main() {
 	server_connection := OpenConnection(*server_address_flag, server_port)
 	defer server_connection.Close()
 
-	// Create a new Encoder for communicating with server
+	// Create gob communicating with server
 	enc := gob.NewEncoder(server_connection)
+	dec := gob.NewDecoder(server_connection)
+	var msg ds.Message
 
-	str := "test string of a large length0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000\n"
+	for {
+		err := dec.Decode(&msg)
+		if err != nil {
+			fmt.Println("Event when decoding message from server: ", err)
+			if err.Error() == "EOF" {
+				break
+			}
+		}
+		fmt.Println(msg)
 
-	// Send encoded gob to server
-	enc.Encode(&str)
+		hash, nonce := Mine(msg.WorkingBlock.Payload, msg.Target)
 
-	//	AppendNonce := Appender()
-	//	h := sha256.New()
-	//	target := "00000"
-	//
-	//	for {
-	//		nonce, AppendedNonce := AppendNonce("hello")
-	//		h.Write([]byte(AppendedNonce))
-	//
-	//		calculated_hash := h.Sum(nil)
-	//
-	//		fmt.Printf("%d %x\n", nonce, calculated_hash)
-	//		calculated_hash_s := fmt.Sprintf("%x", calculated_hash)
-	//
-	//		if calculated_hash_s[:len(target)] == target {
-	//			fmt.Println(calculated_hash[:len(target)/2])
-	//			fmt.Println(target)
-	//			break
-	//		}
-	//	}
+		msg.WorkingBlock.Hash = hash
+		msg.WorkingBlock.Nonce = nonce
+
+		err = enc.Encode(&msg)
+		if err != nil {
+			fmt.Println("Event when encoding message for server: ", err)
+			if err.Error() == "EOF" {
+				break
+			}
+		}
+	}
+
 }
