@@ -39,6 +39,10 @@ func Broadcast(miners map[net.Conn]ds.Miner, msg ds.Message) {
 	}
 }
 
+func UpdateBlockchain() {
+	// broadcast to all miners if nothing is going on
+}
+
 func GetPortFromPtr(port *int) int {
 	x := fmt.Sprintf("%d", *port)
 	p, _ := strconv.Atoi(x)
@@ -102,17 +106,27 @@ func main() {
 		case msg := <-new_miner_message:
 			if msg.WorkingBlock.Index > blockchain.Last {
 				if msg.Verify() {
+					msg.Mined = true
 					blockchain.Blocks[msg.WorkingBlock.Index] = msg.WorkingBlock
 					blockchain.Last += 1
-					msg.Mined = true
 					Broadcast(miners, msg)
 				}
 			}
 
 		case payload := <-new_payload:
-			if len(blockchain.Blocks) == 0 {
-				fmt.Println("sdf", payload)
+			fmt.Println("Got payload: ", payload)
+			blockchain_length := len(blockchain.Blocks)
+			var prev_hash string
+			if blockchain_length == 0 {
+				prev_hash = "0000000000000000000000000000000000000000000000000000000000000000"
+			} else {
+				prev_hash = blockchain.Blocks[len(blockchain.Blocks)-1].Hash
 			}
+			payload_block := ds.Block{0, len(blockchain.Blocks), payload, prev_hash, "", false}
+			blockchain.Blocks = append(blockchain.Blocks, payload_block)
+			blockchain.Complete = false
+			fmt.Println(len(blockchain.Blocks))
+			fmt.Println(blockchain)
 
 		case conn := <-new_client_connection:
 			clients[conn] = ds.Client{conn}
@@ -132,7 +146,7 @@ func main() {
 					new_payload <- message
 					fmt.Println("FIN HERE")
 				}
-				fmt.Println("Attempting to close connection ", conn)
+				fmt.Println("Closing client connection ", conn)
 				remove_client_connection <- conn
 			}(conn)
 
