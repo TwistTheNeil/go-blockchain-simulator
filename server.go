@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"time"
 )
 
 func OpenListener(port int, new_connection chan net.Conn, what chan bool) {
@@ -29,12 +30,34 @@ func OpenListener(port int, new_connection chan net.Conn, what chan bool) {
 
 }
 
-func Broadcast(miners map[net.Conn]ds.Miner, msg ds.Message) {
+func Broadcast(miners *map[net.Conn]ds.Miner, blockchain *ds.Blockchain) {
+	fmt.Println("OOHHH")
+	for {
+		fmt.Println("OOHHH 1")
+		fmt.Println(blockchain)
+		if blockchain.Complete == true || blockchain.Working == true {
+			fmt.Println("OOHHH 2")
+		} else if blockchain.Last == -1 && len(blockchain.Blocks) == 0 {
+			fmt.Println("OOHHH 3")
+		} else if blockchain.Last < len(blockchain.Blocks)-1 {
+			fmt.Println("OOHHH 4")
+			msg := ds.Message{blockchain.Blocks[blockchain.Last+1], false, "000"}
+			blockchain.Working = true
+			go BroadcastToAllMiners(*miners, msg)
+		}
+
+		fmt.Println("OOHHH 5")
+		time.Sleep(2 * time.Second)
+	}
+	fmt.Println("OOHHH 6")
+}
+
+func BroadcastToAllMiners(miners map[net.Conn]ds.Miner, msg ds.Message) {
 	for conn, miner := range miners {
 		enc := gob.NewEncoder(conn)
 		err := enc.Encode(&msg)
 		if err != nil {
-			fmt.Println("Broadcast error: ", conn, " -> ", miner, "->", err)
+			fmt.Println("Broadcast everyone error: ", conn, " -> ", miner, "->", err)
 		}
 	}
 }
@@ -59,7 +82,7 @@ func main() {
 
 	miners := make(map[net.Conn]ds.Miner)
 	clients := make(map[net.Conn]ds.Client)
-	blockchain := ds.Blockchain{[]ds.Block{}, -1, false, true}
+	blockchain := ds.Blockchain{[]ds.Block{}, -1, false, true, false}
 
 	fmt.Println(len(blockchain.Blocks))
 
@@ -78,6 +101,9 @@ func main() {
 
 	OpenListener(miner_port, new_miner_connection, what)
 	OpenListener(client_port, new_client_connection, what)
+
+	// Start broadcasting
+	go Broadcast(&miners, &blockchain)
 
 	for {
 		select {
@@ -109,7 +135,9 @@ func main() {
 					msg.Mined = true
 					blockchain.Blocks[msg.WorkingBlock.Index] = msg.WorkingBlock
 					blockchain.Last += 1
-					Broadcast(miners, msg)
+					blockchain.Working = false
+					blockchain.Blocks[msg.WorkingBlock.Index].Valid = true
+					BroadcastToAllMiners(miners, msg)
 				}
 			}
 
@@ -125,6 +153,7 @@ func main() {
 			payload_block := ds.Block{0, len(blockchain.Blocks), payload, prev_hash, "", false}
 			blockchain.Blocks = append(blockchain.Blocks, payload_block)
 			blockchain.Complete = false
+			fmt.Println("WOOOOOOOOOO")
 			fmt.Println(len(blockchain.Blocks))
 			fmt.Println(blockchain)
 
