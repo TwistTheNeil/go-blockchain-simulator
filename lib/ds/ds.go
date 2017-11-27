@@ -32,7 +32,7 @@ type Message struct {
 
 type Miner struct {
 	Connection net.Conn
-	Mined      int
+	Mining     bool
 }
 
 type Client struct {
