@@ -3,6 +3,7 @@ package main
 import (
 	"./lib/ds"
 	"encoding/gob"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"net"
@@ -11,51 +12,66 @@ import (
 	"time"
 )
 
+func DisplayStats(miners *map[net.Conn]ds.Miner, blockchain *ds.Blockchain) {
+	for {
+		fmt.Println("=========================================================")
+		fmt.Println("Blockchain:")
+		bc, err := json.MarshalIndent(blockchain, "", "  ")
+		if err != nil {
+			fmt.Println("DisplayStats() error: ", err)
+		}
+		fmt.Println(string(bc))
+
+		fmt.Println("Miners:")
+		for _, miner := range *miners {
+			m, err_m := json.MarshalIndent(miner, "", "  ")
+			if err_m != nil {
+				fmt.Println("DisplayStats() error: ", err_m)
+			}
+			fmt.Println(string(m))
+		}
+
+		time.Sleep(1 * time.Second)
+	}
+
+}
+
 func OpenListener(port int, new_connection chan net.Conn, what chan bool) {
 	ln, err := net.Listen("tcp", ":"+strconv.Itoa(port))
 	if err != nil {
-		fmt.Println("OMG 1: Neil do something!")
-		fmt.Println(err)
+		fmt.Println("OpenListener() error:", err)
 	}
 	go func() {
 		for {
 			conn, err := ln.Accept()
 			if err != nil {
-				fmt.Println("OMG 2: Neil do something!")
+				fmt.Println("OpenListener() error:", err)
 			}
 			new_connection <- conn
 		}
 		what <- true
 	}()
-
 }
 
 func Broadcast(miners *map[net.Conn]ds.Miner, blockchain *ds.Blockchain) {
-	fmt.Println("OOHHH")
 	for {
-		fmt.Println("OOHHH 1")
-		fmt.Println(blockchain)
-		if blockchain.Complete == true || blockchain.Working == true {
-			fmt.Println("OOHHH 2")
+		if blockchain.Complete == true {
 		} else if blockchain.Last == -1 && len(blockchain.Blocks) == 0 {
-			fmt.Println("OOHHH 3")
 		} else if blockchain.Last < len(blockchain.Blocks)-1 {
-			fmt.Println("OOHHH 4")
 			msg := ds.Message{blockchain.Blocks[blockchain.Last+1], false, "000"}
-			blockchain.Working = true
-			go BroadcastToAllMiners(*miners, msg)
+			//blockchain.Working = true
+			go BroadcastToAllMiners(miners, msg)
 		}
 
-		fmt.Println("OOHHH 5")
-		time.Sleep(2 * time.Second)
+		time.Sleep(5 * time.Second)
 	}
-	fmt.Println("OOHHH 6")
 }
 
-func BroadcastToAllMiners(miners map[net.Conn]ds.Miner, msg ds.Message) {
-	for conn, miner := range miners {
+func BroadcastToAllMiners(miners *map[net.Conn]ds.Miner, msg ds.Message) {
+	for conn, miner := range *miners {
 		enc := gob.NewEncoder(conn)
 		err := enc.Encode(&msg)
+		miner.Mining = true
 		if err != nil {
 			fmt.Println("Broadcast everyone error: ", conn, " -> ", miner, "->", err)
 		}
@@ -104,11 +120,12 @@ func main() {
 
 	// Start broadcasting
 	go Broadcast(&miners, &blockchain)
+	go DisplayStats(&miners, &blockchain)
 
 	for {
 		select {
 		case conn := <-new_miner_connection:
-			miners[conn] = ds.Miner{conn, 0}
+			miners[conn] = ds.Miner{conn, false}
 			fmt.Println("Received connection from ", conn)
 
 			go func(conn net.Conn) {
@@ -117,15 +134,16 @@ func main() {
 					var message ds.Message
 					err := dec.Decode(&message)
 					if err != nil {
-						fmt.Println("GOB DECODE ERROR: ", err)
-						break
+						fmt.Println("miner gob decode error: ", err)
+						if err.Error() == "EOF" {
+							break
+						}
 					}
-					fmt.Println("GOT HERE")
-					fmt.Println(message)
+					myself := miners[conn]
+					myself.Mining = false
 					new_miner_message <- message
-					fmt.Println("FIN HERE")
 				}
-				fmt.Println("Attempting to close connection ", conn)
+				fmt.Println("Closing miner connection ", conn)
 				remove_miner_connection <- conn
 			}(conn)
 
@@ -133,11 +151,14 @@ func main() {
 			if msg.WorkingBlock.Index > blockchain.Last {
 				if msg.Verify() {
 					msg.Mined = true
+					if msg.WorkingBlock.Index > 0 {
+						msg.WorkingBlock.Prev = blockchain.Blocks[msg.WorkingBlock.Index-1].Hash
+					}
 					blockchain.Blocks[msg.WorkingBlock.Index] = msg.WorkingBlock
 					blockchain.Last += 1
 					blockchain.Working = false
 					blockchain.Blocks[msg.WorkingBlock.Index].Valid = true
-					BroadcastToAllMiners(miners, msg)
+					BroadcastToAllMiners(&miners, msg)
 				}
 			}
 
@@ -147,13 +168,10 @@ func main() {
 			var prev_hash string
 			if blockchain_length == 0 {
 				prev_hash = "0000000000000000000000000000000000000000000000000000000000000000"
-			} else {
-				prev_hash = blockchain.Blocks[len(blockchain.Blocks)-1].Hash
 			}
 			payload_block := ds.Block{0, len(blockchain.Blocks), payload, prev_hash, "", false}
 			blockchain.Blocks = append(blockchain.Blocks, payload_block)
 			blockchain.Complete = false
-			fmt.Println("WOOOOOOOOOO")
 			fmt.Println(len(blockchain.Blocks))
 			fmt.Println(blockchain)
 
@@ -167,13 +185,12 @@ func main() {
 					var message string
 					err := dec.Decode(&message)
 					if err != nil {
-						fmt.Println("GOB DECODE ERROR: ", err)
-						break
+						fmt.Println("client gob decode error: ", err)
+						if err.Error() == "EOF" {
+							break
+						}
 					}
-					fmt.Println("GOT HERE")
-					fmt.Println(message)
 					new_payload <- message
-					fmt.Println("FIN HERE")
 				}
 				fmt.Println("Closing client connection ", conn)
 				remove_client_connection <- conn
