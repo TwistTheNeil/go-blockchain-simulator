@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func DisplayStats(miners *map[net.Conn]ds.Miner, blockchain *ds.Blockchain) {
+func DisplayStats(miners *map[net.Conn]*ds.Miner, blockchain *ds.Blockchain) {
 	for {
 		fmt.Println("=========================================================")
 		fmt.Println("Blockchain:")
@@ -53,13 +53,12 @@ func OpenListener(port int, new_connection chan net.Conn, what chan bool) {
 	}()
 }
 
-func Broadcast(miners *map[net.Conn]ds.Miner, blockchain *ds.Blockchain) {
+func Broadcast(miners *map[net.Conn]*ds.Miner, blockchain *ds.Blockchain) {
 	for {
 		if blockchain.Complete == true {
 		} else if blockchain.Last == -1 && len(blockchain.Blocks) == 0 {
 		} else if blockchain.Last < len(blockchain.Blocks)-1 {
 			msg := ds.Message{blockchain.Blocks[blockchain.Last+1], false, "000"}
-			//blockchain.Working = true
 			go BroadcastToAllMiners(miners, msg)
 		}
 
@@ -67,7 +66,7 @@ func Broadcast(miners *map[net.Conn]ds.Miner, blockchain *ds.Blockchain) {
 	}
 }
 
-func BroadcastToAllMiners(miners *map[net.Conn]ds.Miner, msg ds.Message) {
+func BroadcastToAllMiners(miners *map[net.Conn]*ds.Miner, msg ds.Message) {
 	for conn, miner := range *miners {
 		enc := gob.NewEncoder(conn)
 		err := enc.Encode(&msg)
@@ -96,7 +95,7 @@ func main() {
 
 	flag.Parse()
 
-	miners := make(map[net.Conn]ds.Miner)
+	miners := make(map[net.Conn]*ds.Miner)
 	clients := make(map[net.Conn]ds.Client)
 	blockchain := ds.Blockchain{[]ds.Block{}, -1, false, true, false}
 
@@ -110,6 +109,7 @@ func main() {
 	remove_miner_connection := make(chan net.Conn)
 	remove_client_connection := make(chan net.Conn)
 	new_miner_message := make(chan ds.Message)
+	miner_chan := make(chan *ds.Miner)
 	new_payload := make(chan string)
 
 	// TODO: Get rid of this channel eventually
@@ -125,7 +125,7 @@ func main() {
 	for {
 		select {
 		case conn := <-new_miner_connection:
-			miners[conn] = ds.Miner{conn, false}
+			miners[conn] = &ds.Miner{conn, false, 0}
 			fmt.Println("Received connection from ", conn)
 
 			go func(conn net.Conn) {
@@ -142,12 +142,14 @@ func main() {
 					myself := miners[conn]
 					myself.Mining = false
 					new_miner_message <- message
+					miner_chan <- myself
 				}
 				fmt.Println("Closing miner connection ", conn)
 				remove_miner_connection <- conn
 			}(conn)
 
 		case msg := <-new_miner_message:
+			miner := <-miner_chan
 			if msg.WorkingBlock.Index > blockchain.Last {
 				if msg.Verify() {
 					msg.Mined = true
@@ -158,7 +160,8 @@ func main() {
 					blockchain.Last += 1
 					blockchain.Working = false
 					blockchain.Blocks[msg.WorkingBlock.Index].Valid = true
-					BroadcastToAllMiners(&miners, msg)
+
+					miners[miner.Connection].Mined++
 				}
 			}
 

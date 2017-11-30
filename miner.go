@@ -31,8 +31,6 @@ func Mine(payload string, target string) (string, int) {
 		h.Write([]byte(payload + strconv.Itoa(nonce)))
 		hash := fmt.Sprintf("%x", h.Sum(nil))
 		if hash[:len(target)] == target {
-			fmt.Println(target)
-			fmt.Println("returning", hash, nonce)
 			return hash, nonce
 			break
 		}
@@ -56,9 +54,10 @@ func main() {
 	// Create gob communicating with server
 	enc := gob.NewEncoder(server_connection)
 	dec := gob.NewDecoder(server_connection)
-	var msg ds.Message
 
 	for {
+		var msg ds.Message
+
 		err := dec.Decode(&msg)
 		if err != nil {
 			fmt.Println("Event when decoding message from server: ", err)
@@ -66,7 +65,6 @@ func main() {
 				break
 			}
 		}
-		fmt.Println(msg)
 
 		hash, nonce := Mine(msg.WorkingBlock.Payload, msg.Target)
 
