@@ -69,13 +69,18 @@ func Broadcast(miners *map[net.Conn]ds.Miner, blockchain *ds.Blockchain) {
 
 func BroadcastToAllMiners(miners *map[net.Conn]ds.Miner, msg ds.Message) {
 	for conn, miner := range *miners {
-		enc := gob.NewEncoder(conn)
-		err := enc.Encode(&msg)
 		miner.Mining = true
+		err := BroadcastToMiner(miner, msg)
 		if err != nil {
 			fmt.Println("Broadcast everyone error: ", conn, " -> ", miner, "->", err)
 		}
 	}
+}
+
+func BroadcastToMiner(miner ds.Miner, msg ds.Message) error {
+	enc := gob.NewEncoder(miner.Connection)
+	err := enc.Encode(&msg)
+	return err
 }
 
 func UpdateBlockchain() {
@@ -110,6 +115,7 @@ func main() {
 	remove_miner_connection := make(chan net.Conn)
 	remove_client_connection := make(chan net.Conn)
 	new_miner_message := make(chan ds.Message)
+	sender_channel := make(chan ds.Miner)
 	new_payload := make(chan string)
 
 	// TODO: Get rid of this channel eventually
@@ -142,12 +148,14 @@ func main() {
 					myself := miners[conn]
 					myself.Mining = false
 					new_miner_message <- message
+					sender_channel <- myself
 				}
 				fmt.Println("Closing miner connection ", conn)
 				remove_miner_connection <- conn
 			}(conn)
 
 		case msg := <-new_miner_message:
+			sender := <-sender_channel
 			if msg.WorkingBlock.Index > blockchain.Last {
 				if msg.Verify() {
 					msg.Mined = true
@@ -158,7 +166,8 @@ func main() {
 					blockchain.Last += 1
 					blockchain.Working = false
 					blockchain.Blocks[msg.WorkingBlock.Index].Valid = true
-					BroadcastToAllMiners(&miners, msg)
+
+					BroadcastToMiner(sender, msg)
 				}
 			}
 
