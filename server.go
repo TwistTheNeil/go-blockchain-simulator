@@ -77,10 +77,6 @@ func BroadcastToAllMiners(miners *map[net.Conn]*ds.Miner, msg ds.Message) {
 	}
 }
 
-func UpdateBlockchain() {
-	// broadcast to all miners if nothing is going on
-}
-
 func GetPortFromPtr(port *int) int {
 	x := fmt.Sprintf("%d", *port)
 	p, _ := strconv.Atoi(x)
@@ -121,6 +117,7 @@ func main() {
 	// Start broadcasting
 	go Broadcast(&miners, &blockchain)
 	go DisplayStats(&miners, &blockchain)
+	go blockchain.BlockchainStatus()
 
 	for {
 		select {

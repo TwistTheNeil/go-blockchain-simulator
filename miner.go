@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"os"
 	"strconv"
 )
 
@@ -46,6 +47,7 @@ func main() {
 
 	flag.Parse()
 
+	fmt.Println("My PID:", os.Getpid())
 	var server_port int = GetPortFromPtr(server_port_flag)
 
 	server_connection := OpenConnection(*server_address_flag, server_port)
