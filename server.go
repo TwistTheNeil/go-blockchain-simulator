@@ -93,7 +93,7 @@ func main() {
 
 	miners := make(map[net.Conn]*ds.Miner)
 	clients := make(map[net.Conn]ds.Client)
-	blockchain := ds.Blockchain{[]ds.Block{}, -1, false, true, false}
+	blockchain := ds.Blockchain{[]ds.Block{}, -1, false, true}
 
 	fmt.Println(len(blockchain.Blocks))
 
@@ -155,7 +155,6 @@ func main() {
 					}
 					blockchain.Blocks[msg.WorkingBlock.Index] = msg.WorkingBlock
 					blockchain.Last += 1
-					blockchain.Working = false
 					blockchain.Blocks[msg.WorkingBlock.Index].Valid = true
 
 					miners[miner.Connection].Mined++

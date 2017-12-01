@@ -22,7 +22,6 @@ type Blockchain struct {
 	Last     int
 	Tamper   bool
 	Complete bool
-	Working  bool // Are miners working on a block?
 }
 
 type Message struct {
