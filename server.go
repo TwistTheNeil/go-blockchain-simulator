@@ -36,7 +36,7 @@ func DisplayStats(miners *map[net.Conn]*ds.Miner, blockchain *ds.Blockchain) {
 
 }
 
-func OpenListener(port int, new_connection chan net.Conn, what chan bool) {
+func OpenListener(port int, new_connection chan net.Conn) {
 	ln, err := net.Listen("tcp", ":"+strconv.Itoa(port))
 	if err != nil {
 		fmt.Println("OpenListener() error:", err)
@@ -49,7 +49,6 @@ func OpenListener(port int, new_connection chan net.Conn, what chan bool) {
 			}
 			new_connection <- conn
 		}
-		what <- true
 	}()
 }
 
@@ -58,7 +57,7 @@ func Broadcast(miners *map[net.Conn]*ds.Miner, blockchain *ds.Blockchain) {
 		if blockchain.Complete == true {
 		} else if blockchain.Last == -1 && len(blockchain.Blocks) == 0 {
 		} else if blockchain.Last < len(blockchain.Blocks)-1 {
-			msg := ds.Message{blockchain.Blocks[blockchain.Last+1], false, "000"}
+			msg := ds.Message{blockchain.Blocks[blockchain.Last+1], false, blockchain.Target}
 			go BroadcastToAllMiners(miners, msg)
 		}
 
@@ -88,12 +87,14 @@ func main() {
 		"Port on which server listens on for miner")
 	client_port_flag := flag.Int("cport", 9875,
 		"Port on which server listens on client")
+	target_flag := flag.String("target", "000",
+		"Difficulty which should be targetted")
 
 	flag.Parse()
 
 	miners := make(map[net.Conn]*ds.Miner)
 	clients := make(map[net.Conn]ds.Client)
-	blockchain := ds.Blockchain{[]ds.Block{}, -1, false, true}
+	blockchain := ds.Blockchain{[]ds.Block{}, -1, false, true, *target_flag}
 
 	fmt.Println(len(blockchain.Blocks))
 
@@ -108,11 +109,8 @@ func main() {
 	miner_chan := make(chan *ds.Miner)
 	new_payload := make(chan string)
 
-	// TODO: Get rid of this channel eventually
-	what := make(chan bool)
-
-	OpenListener(miner_port, new_miner_connection, what)
-	OpenListener(client_port, new_client_connection, what)
+	OpenListener(miner_port, new_miner_connection)
+	OpenListener(client_port, new_client_connection)
 
 	// Start broadcasting
 	go Broadcast(&miners, &blockchain)
@@ -203,9 +201,6 @@ func main() {
 		}
 	}
 
-	// TODO: remove stuff beyond this point
-	<-what
-	<-what
 	fmt.Println("Debug: Success")
 	os.Exit(0)
 }

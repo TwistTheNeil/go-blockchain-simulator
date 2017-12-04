@@ -22,6 +22,7 @@ type Blockchain struct {
 	Last     int
 	Tamper   bool
 	Complete bool
+	Target   string
 }
 
 type Message struct {
