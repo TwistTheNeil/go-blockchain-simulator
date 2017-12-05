@@ -64,12 +64,11 @@ func main() {
 	}
 	defer server_connection.Close()
 
-	// Create gob communicating with server
-	enc := gob.NewEncoder(server_connection)
-	dec := gob.NewDecoder(server_connection)
-
 	for {
 		var msg ds.Message
+		// Create gob communicating with server
+		enc := gob.NewEncoder(server_connection)
+		dec := gob.NewDecoder(server_connection)
 
 		err := dec.Decode(&msg)
 		if err != nil {
