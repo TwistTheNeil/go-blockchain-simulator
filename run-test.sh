@@ -28,3 +28,5 @@ done
 for payload in ${PAYLOAD_DIR}/*; do
 	go run client.go -payload "$(cat "${payload}")" &
 done
+
+go run server.go -target 00000
