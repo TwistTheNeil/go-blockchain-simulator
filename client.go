@@ -8,7 +8,23 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"time"
 )
+
+func OpenConnection(addr string, port int) (net.Conn, error) {
+	var err error
+	var conn net.Conn
+
+	for i := 0; i < 5; i++ {
+		conn, err = net.Dial("tcp", addr+":"+strconv.Itoa(port))
+		if err == nil {
+			break
+		}
+		time.Sleep(2 * time.Second)
+	}
+
+	return conn, err
+}
 
 func main() {
 	server_port_flag := flag.Int("port", 9875,
@@ -20,16 +36,18 @@ func main() {
 
 	flag.Parse()
 
-	conn, err := net.Dial("tcp", *server_address_flag+":"+strconv.Itoa(*server_port_flag))
+	server_connection, err := OpenConnection(*server_address_flag, *server_port_flag)
 	if err != nil {
-		fmt.Println("Error connecting: ", err)
-		os.Exit(1)
+		fmt.Println("Error while connecting to server:", err)
+		os.Exit(2)
 	}
+	defer server_connection.Close()
 
-	enc := gob.NewEncoder(conn)
+	enc := gob.NewEncoder(server_connection)
 	enc_err := enc.Encode(&payload_flag)
 
 	if enc_err != nil {
 		fmt.Println("Error sending to server: ", enc_err)
+		os.Exit(3)
 	}
 }

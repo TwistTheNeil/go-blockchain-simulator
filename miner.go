@@ -9,15 +9,22 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"time"
 )
 
-func OpenConnection(addr string, port int) net.Conn {
-	conn, err := net.Dial("tcp", addr+":"+strconv.Itoa(port))
-	if err != nil {
-		fmt.Printf("ERROR: ")
-		fmt.Println(err)
+func OpenConnection(addr string, port int) (net.Conn, error) {
+	var err error
+	var conn net.Conn
+
+	for i := 0; i < 5; i++ {
+		conn, err = net.Dial("tcp", addr+":"+strconv.Itoa(port))
+		if err == nil {
+			break
+		}
+		time.Sleep(2 * time.Second)
 	}
-	return conn
+
+	return conn, err
 }
 
 func GetPortFromPtr(port *int) int {
@@ -50,7 +57,11 @@ func main() {
 	fmt.Println("My PID:", os.Getpid())
 	var server_port int = GetPortFromPtr(server_port_flag)
 
-	server_connection := OpenConnection(*server_address_flag, server_port)
+	server_connection, err := OpenConnection(*server_address_flag, server_port)
+	if err != nil {
+		fmt.Println("Error while connecting to server:", err)
+		os.Exit(2)
+	}
 	defer server_connection.Close()
 
 	// Create gob communicating with server
@@ -62,9 +73,11 @@ func main() {
 
 		err := dec.Decode(&msg)
 		if err != nil {
-			fmt.Println("Event when decoding message from server: ", err)
 			if err.Error() == "EOF" {
+				fmt.Println("Info: Server closed connection")
 				break
+			} else {
+				fmt.Println("Event when decoding message from server: ", err)
 			}
 		}
 
@@ -75,9 +88,11 @@ func main() {
 
 		err = enc.Encode(&msg)
 		if err != nil {
-			fmt.Println("Event when encoding message for server: ", err)
 			if err.Error() == "EOF" {
+				fmt.Println("Info: Server closed connection")
 				break
+			} else {
+				fmt.Println("Event when encoding message for server: ", err)
 			}
 		}
 	}
