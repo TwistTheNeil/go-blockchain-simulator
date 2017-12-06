@@ -2,13 +2,23 @@
 
 This project demonstrates a simple simulation of Blockchain written in Go.
 
+## Navigation
+1. [Prerequisites](#prerequisites)
+2. [Architecture Documentation](docs/architecture.md)
+3. [Quick Test Run](#quick-test-run)
+4. [Project Description](#project-description)
+    * [Server](#server)
+    * [Miner](#miner)
+    * [Client](#client)
+5. [Development Environment](#my-development-environment)
+
 ## Prerequisites:
 * Go
 * Bash (only for the test script)
 
-## Architecture
+## Architecture Documentation
 
-[TODO: Click here]()
+[Click here](docs/architecture.md)
 
 ## Project Description
 
