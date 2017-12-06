@@ -11,6 +11,7 @@ This project demonstrates a simple simulation of Blockchain written in Go.
     * [Miner](#miner)
     * [Client](#client)
 5. [Development Environment](#my-development-environment)
+6. [TODO list](TODO.md)
 
 ## Prerequisites:
 * Go
